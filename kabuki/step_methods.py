@@ -353,6 +353,7 @@ class SliceStep(pm.Gibbs):
         whilecounter = 0
         while whilecounter < max_whilecounter:
             whilecounter += 1
+            assert whilecounter < max_whilecounter, "JY: step-out failed even after repeating 100 times" 
             self.neval=0
             stoch = self.stochastic
             value = stoch.value
@@ -432,7 +433,7 @@ class SliceStep(pm.Gibbs):
             if self.verbose>2:
                 print('after %d iteration found new value: %.3f' % (iter, xp))
             break # exit
-        assert whilecounter < max_whilecounter, "JY: step-out failed even after repeating 100 times" 
+        
 
     def get_logp(self):
         try:
