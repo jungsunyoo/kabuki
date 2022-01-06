@@ -431,6 +431,7 @@ class SliceStep(pm.Gibbs):
             self.neval += iter
             if self.verbose>2:
                 print('after %d iteration found new value: %.3f' % (iter, xp))
+            break # exit
         assert whilecounter < max_whilecounter, "JY: step-out failed even after repeating 100 times" 
 
     def get_logp(self):
