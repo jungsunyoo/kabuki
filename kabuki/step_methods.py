@@ -348,77 +348,90 @@ class SliceStep(pm.Gibbs):
         self.left = left
 
     def step(self):
-        stoch = self.stochastic
-        value = stoch.value
+        # JY modified in 2022-01-06 to prevent step-out assertions
+        max_whilecounter = 100
+        whilecounter = 0
+        while whilecounter < max_whilecounter:
+            whilecounter += 1
+            self.neval=0
+            stoch = self.stochastic
+            value = stoch.value
 
-        #sample vertical level
-        z = self.logp_plus_loglike - np.random.exponential()
+            #sample vertical level
+            z = self.logp_plus_loglike - np.random.exponential()
 
-        if self.verbose>2:
-            print(self._id + ' current value: %.3f' % value)
-            print(self._id + ' sampled vertical level ' + repr(z))
-
-
-        #position an interval at random starting position around the current value
-        r = self.width * np.random.rand()
-        xr = value + r
-        if self.left is not None:
-            xl = self.left
-        else:
-            xl = xr - self.width
+            if self.verbose>2:
+                print(self._id + ' current value: %.3f' % value)
+                print(self._id + ' sampled vertical level ' + repr(z))
 
 
-        if self.verbose>2:
-            print('initial interval [%.3f, %.3f]' % (xl, xr))
+            #position an interval at random starting position around the current value
+            r = self.width * np.random.rand()
+            xr = value + r
+            if self.left is not None:
+                xl = self.left
+            else:
+                xl = xr - self.width
 
-        if self.left is None:
-            #step out to the left
-            iter = 0
-            stoch.value = xl
-            while (self.get_logp() >= z) and (iter < self.maxiter):
-                xl -= self.width
+
+            if self.verbose>2:
+                print('initial interval [%.3f, %.3f]' % (xl, xr))
+
+            if self.left is None:
+                #step out to the left
+                iter = 0
                 stoch.value = xl
-                iter += 1
+                while (self.get_logp() >= z) and (iter < self.maxiter):
+                    xl -= self.width
+                    stoch.value = xl
+                    iter += 1
 
-            assert iter < self.maxiter, "Step-out procedure failed"
+                # assert iter < self.maxiter, "Step-out procedure failed"
+                if iter > self.maxiter: 
+                    continue # go back to the top
+                self.neval += iter
+
+                if self.verbose>2:
+                    print('after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr))
+
+            #step out to the right
+            iter = 0
+            stoch.value = xr
+            while (self.get_logp() >= z) and (iter < self.maxiter):
+                    xr += self.width
+                    stoch.value = xr
+                    iter += 1
+
+            # assert iter < self.maxiter, "Step-out procedure failed"
+            if iter > self.maxiter: 
+                continue # go back to the top
+
             self.neval += iter
-
             if self.verbose>2:
                 print('after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr))
 
-        #step out to the right
-        iter = 0
-        stoch.value = xr
-        while (self.get_logp() >= z) and (iter < self.maxiter):
-                xr += self.width
-                stoch.value = xr
+            #draw a new point from the interval [xl, xr].
+            xp = rand()*(xr-xl) + xl
+            stoch.value = xp
+
+            #if the point is outside the interval than shrink it and draw again
+            iter = 0
+            while(self.get_logp() < z) and (iter < self.maxiter):
+                if (xp > value):
+                    xr = xp
+                else:
+                    xl = xp
+                xp = rand() * (xr-xl) + xl #draw again
+                stoch.value = xp
                 iter += 1
 
-        assert iter < self.maxiter, "Step-out procedure failed"
-        self.neval += iter
-        if self.verbose>2:
-            print('after %d iteration interval is [%.3f, %.3f]' % (iter, xl, xr))
-
-        #draw a new point from the interval [xl, xr].
-        xp = rand()*(xr-xl) + xl
-        stoch.value = xp
-
-        #if the point is outside the interval than shrink it and draw again
-        iter = 0
-        while(self.get_logp() < z) and (iter < self.maxiter):
-            if (xp > value):
-                xr = xp
-            else:
-                xl = xp
-            xp = rand() * (xr-xl) + xl #draw again
-            stoch.value = xp
-            iter += 1
-
-        assert iter < self.maxiter, "Shrink-in procedure failed."
-        self.neval += iter
-        if self.verbose>2:
-            print('after %d iteration found new value: %.3f' % (iter, xp))
-
+            # assert iter < self.maxiter, "Shrink-in procedure failed."
+            if iter > self.maxiter: 
+                continue # go back to the top            
+            self.neval += iter
+            if self.verbose>2:
+                print('after %d iteration found new value: %.3f' % (iter, xp))
+        assert whilecounter < max_whilecounter, "JY: step-out failed even after repeating 100 times" 
 
     def get_logp(self):
         try:
